@@ -4,6 +4,87 @@
 
 ---
 
+## [1.7.1] — 2026-04-26
+
+来自 4 位中文语言专家 + Codex 跨模型会审，针对用户对 3 类问题的零容忍反馈做硬阻升级。
+
+### Added
+
+- **scan.py 4 个新检测器**：
+  - `detect_meta_discourse`：AI 助手对话腔元话语硬阻黑名单（一句话总结 / 划重点 / 敲黑板 / TL;DR / 简言之 / 要点 / 精华 / 重点是）。high severity，命中即扣分。
+  - `detect_hedge_with_claim`：hedge 词 + 具体数字/年份/作者共现模式。命中输出 `hedge_with_unverified_claim` finding，强制核实出处或加 `[TODO: 待核实]` 至脚注（不进正文）。
+  - `detect_omissions(raw, rewritten)`：自动 diff 三类硬事实（列表项/文件路径/数字常量）。采用「完全消失」判定（raw 中存在但 rewritten 中作为子串完全不存在），合并改写不触发误报。
+  - `classify_paragraphs`：段类型自动分类（code_block / table / field_def / heading / list / summary / metadata / narrative），让段级豁免有自动依据。
+- **scan.py 新增 `--compare-with` 参数**：`python scan.py rewritten.md --compare-with raw.md` 自动 omission-check。`total_omissions > 0` 时输出 ⚠️ warning 到 `report.warnings`。
+- **blacklist.json 新增 2 类**：
+  - `meta_discourse_markers`：元话语黑名单（high severity）
+  - `hedge_with_claim_patterns`：hedge + claim 正则
+- **blacklist.json `ai_writing_structural` 新增 3 项**：元话语标记（v1.7.1）/ 汉语经典连贯排比保护（一是/二是/三是 不改成 First/Second 分段）。
+
+### Changed
+
+- **护栏 8 升级为硬阻自动 diff**：必须显式说明每处删除（list / path / number），「没解释的删除等于错误改写」。
+- **护栏 9 升级**：加 Part B「hedge + 具体出处 = 必须核实」。带具体数字/出处的 hedge 也可能是幻觉，必须三选一处理（验证真伪 / 加 TODO 至脚注 / 改为模糊但诚实表述）。**不豁免**。
+- **护栏 10 升级为静态黑名单硬阻**：拆分为 Part A（元话语黑名单）/ Part B（汉语经典排比保护）/ Part C（声音指纹仍是规则描述，未量化）。
+- frontmatter `metadata.version`: 1.7.0 → 1.7.1
+
+### Verified
+
+集成测试在 v1.6 改写稿上抓到的问题（**v1.6 同模型 reality-checker 全部漏报**）：
+
+- 元话语硬阻命中：3 处（38KB 研究报告 改写稿 中：一句话总结/要点/重点是）
+- omission 自动 diff 总计：164 处事实条目静默删除（覆盖 13 个文档）
+  - 调研报告改写稿：抓到文件清单条目（含具体路径）静默删除
+  - 商业评估稿改写稿：抓到 8 处时间/金额数字消失
+  - 38KB 研究报告改写稿：抓到 30 处列表项消失
+- 段分类成功：架构文档 18 code_block + 2 table + 28 narrative（混合体精准识别）
+
+---
+
+## [1.7.0] — 2026-04-26
+
+来自 5 路跨模型会审（4 中文语言专家 + Codex GPT-5）的 4 个 P0 + 多项 P1 修复。
+
+### Fixed (P0)
+
+- **护栏 7 (新增): U+E000-U+F8FF (PUA) + ZWSP/BOM 元数据穿透保护**
+  阻止改写过程剥离 agent 留下的引用占位符（如 ChatGPT Deep Research 类 citeturn）。来自学术编辑会审反馈：38KB 研究报告 472 处 PUA 全部被剥离的事故。
+  - scan.py 新增 `detect_metadata_chars` + `detect_double_hedging`
+  - 实测：raw PUA 472 → v1.6 改写稿 PUA 0（剥离）+ citeturn 102（泄漏）
+- **护栏 8 (新增): omission-check 反幻觉升级为双向（既查新增也查删除）**
+  禁止静默删除文件清单/列表项/差异化依据/关键限定语。来自散文编辑 + 跨模型审反馈：调研报告中文件清单条目 + 关键限定语静默删除。
+- **护栏 9 (新增): hedge 词保护（attributed claim → necessary condition 越权检测）**
+  「被认为...重要」不能改成「是必要条件」。来自学术编辑反馈：文献综述中软主张升硬论断事故。
+  - blacklist.json 新增 `hedge_protected` 类
+- **护栏 1 升级：从词级到段落位置识别**
+  spec/架构文档段全段豁免 `formal_to_colloquial`，无论义务性还是描述性 cannot。来自技术编辑反馈：架构文档「不能预设/无法应对」误改。
+
+### Fixed (P1)
+
+- **护栏 10 (新增)**：声音守恒 + 元话语禁忌（'一句话总结：'/'划重点：' 跨声轨切换禁用）。
+- **护栏 3 强化**：[TODO] 占位符不入正文（放脚注/批注）。
+- **段级豁免**：从文档级判定升级到段落级。
+- **blacklist.json 新增 4 类**：
+  - `technical_writing_localized`：是否/负责/扫描/无法/进行/实施 等 OpenAPI/RFC 翻译惯例
+  - `hedge_protected`：受保护软主张词
+  - `business_colloquial_banned`：商业体裁禁用口语词（吃力/做个对比/先说一句）
+  - `metadata_passthrough_chars`：PUA/隐形字符必须穿透
+- **scenario-rules.md 新增场景 13**：工程估算文档默认豁免（避免「计算→算法」「应对→用于应对」类反向负优化）。
+
+### Verified
+
+- 38KB 研究报告原文：PUA 472 + citeturn 212 ✓ 检测器抓到
+- 同文档 v1.6 改写稿：PUA 0（被剥离）+ citeturn 102（泄漏）✓ 实锤 P0 bug
+- 商业评估稿 v1.6 改写：新引入 1 处 double_hedging ✓ 验证商业编辑诊断
+- 其他 18 文档：detector 无误报
+
+### Changed
+
+- frontmatter `metadata.version`: 1.6.0 → 1.7.0
+- 6 条强制护栏 → 10 条强制护栏
+
+---
+
 ## [1.6.0] — 2026-04-26
 
 ### Fixed
@@ -157,6 +238,8 @@
 
 ---
 
+[1.7.1]: ./CHANGELOG.md#171---2026-04-26
+[1.7.0]: ./CHANGELOG.md#170---2026-04-26
 [1.6.0]: ./CHANGELOG.md#160---2026-04-26
 [1.5.0]: ./CHANGELOG.md#150---2026-04-26
 [1.4.0]: ./CHANGELOG.md#140---2026-04-26

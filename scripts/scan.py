@@ -286,6 +286,214 @@ def negation_density_check(text: str, patterns: list[str]) -> dict[str, Any]:
     }
 
 
+def detect_meta_discourse(text: str, bl: dict[str, Any]) -> dict[str, Any]:
+    """
+    v1.7.1 新增：AI 助手对话腔元话语硬阻。
+    来自 expert-prose 会审反馈 + 用户零容忍指示（16 号"结论 → 一句话总结："声轨切换）。
+    """
+    md = bl.get("meta_discourse_markers", {})
+    markers = md.get("high") or []
+    hits: list[dict[str, Any]] = []
+    for w in markers:
+        if not w:
+            continue
+        idx = 0
+        while True:
+            p = text.find(w, idx)
+            if p < 0:
+                break
+            hits.append({"marker": w, "pos": p})
+            idx = p + len(w)
+    return {
+        "count": len(hits),
+        "hits": hits[:30],
+        "severity": "high",
+        "rule": "禁止跨声轨切换：研究报告/学术/严肃商业文档不能用 AI 助手对话腔元话语标记。",
+    }
+
+
+def detect_hedge_with_claim(text: str, bl: dict[str, Any]) -> dict[str, Any]:
+    """
+    v1.7.1 新增：hedge + 具体出处 = 需核实。
+    来自用户反馈：带数字的 hedge 也可能是幻觉，必须强制核实。
+    """
+    hp = bl.get("hedge_with_claim_patterns", {})
+    patterns = hp.get("patterns") or []
+    hits: list[dict[str, Any]] = []
+    for pat in patterns:
+        try:
+            for m in re.finditer(pat, text):
+                ctx_start = max(0, m.start() - 20)
+                ctx_end = min(len(text), m.end() + 20)
+                hits.append({
+                    "match": m.group(0),
+                    "pos": m.start(),
+                    "context": text[ctx_start:ctx_end].replace("\n", " "),
+                })
+        except re.error as e:
+            sys.stderr.write(f"warning: hedge_with_claim 正则编译失败 - {e}\n")
+    return {
+        "count": len(hits),
+        "hits": hits[:30],
+        "severity": "mid",
+        "rule": (
+            "命中即标 needs_verification。改写时必须做以下三选一："
+            "(1) 验证出处真伪 (2) 加 [TODO: 待核实] 至脚注（不进正文） (3) 改为模糊但诚实的描述。"
+            "禁止删除 hedge 模糊度而保留具体数字/出处。"
+        ),
+    }
+
+
+def classify_paragraphs(text: str) -> list[dict[str, Any]]:
+    """
+    v1.7.1 新增：段类型自动分类。
+    来自 expert-technical 会审反馈：豁免应是段级而非整文档级（11/12/14/19 类混合体）。
+
+    类型枚举：code_block / table / field_def / heading / list / summary / metadata / narrative
+    """
+    paras = split_paragraphs(text)
+    segments: list[dict[str, Any]] = []
+    field_def_re = re.compile(r"^\s*(\w+)\s*[:：]\s*\w+", re.MULTILINE)
+    interface_re = re.compile(r"\binterface\s+\w+|\btype\s+\w+\s*=", re.IGNORECASE)
+    for p in paras:
+        first_line = p.lstrip().split("\n", 1)[0]
+        seg_type = "narrative"
+        if "```" in p or p.startswith("    "):
+            seg_type = "code_block"
+        elif p.count("|") >= 6 and p.count("\n") >= 1:
+            # 含至少 2 行 | 分隔（表头+数据 / 表头+分隔行）
+            pipe_lines = [ln for ln in p.split("\n") if "|" in ln]
+            if len(pipe_lines) >= 2:
+                seg_type = "table"
+        elif first_line.startswith("#"):
+            seg_type = "heading"
+        elif re.match(r"^\s*[-*+]\s+", first_line):
+            seg_type = "list"
+        elif re.match(r"^\s*\d+[.)]\s+", first_line):
+            seg_type = "list"
+        elif re.match(r"^\s*(总结|结论|小结|综上)", first_line):
+            seg_type = "summary"
+        elif interface_re.search(p) or len(field_def_re.findall(p)) >= 3:
+            seg_type = "field_def"
+        elif first_line.startswith(("- name:", "name:", "type:", "version:")):
+            seg_type = "metadata"
+        segments.append({
+            "type": seg_type,
+            "length": len(p),
+            "first_line": first_line[:60],
+        })
+    type_counts: dict[str, int] = {}
+    for s in segments:
+        type_counts[s["type"]] = type_counts.get(s["type"], 0) + 1
+    return {
+        "total": len(segments),
+        "by_type": type_counts,
+        "segments": segments[:50],
+        "rule": (
+            "段级豁免：code_block/table/field_def/metadata 永远不改；"
+            "list/heading 仅删装饰 emoji 和谄媚；"
+            "narrative/summary 按场景规则改写；"
+            "技术工件场景下 list 也豁免。"
+        ),
+    }
+
+
+def _extract_list_items(text: str) -> set[str]:
+    """提取 markdown 列表项（去前缀 - * + 1.）。"""
+    items: set[str] = set()
+    for m in re.finditer(r"^\s*(?:[-*+]|\d+[.)])\s+(.+?)\s*$", text, re.MULTILINE):
+        item = m.group(1).strip()
+        # 过滤过短（< 4 字）的列表项避免噪声
+        if len(item) >= 4:
+            items.add(item)
+    return items
+
+
+def _extract_file_paths(text: str) -> set[str]:
+    """提取文件路径（含 / 或 \\，至少含一个常见扩展名或目录段）。"""
+    pat = r"[\w./\\-]*[/\\][\w./\\-]+\.(?:py|js|ts|tsx|jsx|md|json|yaml|yml|toml|sh|sql|html|css|cpp|c|h|hpp|go|rs|java|rb|php|xml|csv|txt)"
+    return set(re.findall(pat, text))
+
+
+def _extract_numbers(text: str) -> set[str]:
+    """提取数字常量（百分比/年份/版本/金额）。"""
+    nums: set[str] = set()
+    # 百分比
+    for m in re.finditer(r"\b\d+(?:\.\d+)?%", text):
+        nums.add(m.group(0))
+    # 年份
+    for m in re.finditer(r"\b(?:19|20)\d{2}\s*年|\b(?:19|20)\d{2}\b", text):
+        nums.add(m.group(0).strip())
+    # 金额（带单位）
+    for m in re.finditer(r"\b\d+(?:\.\d+)?\s*(?:万|亿|千|美元|欧元|元|美金|港币|英镑|日元|RMB|USD|EUR|JPY)", text):
+        nums.add(m.group(0))
+    # 版本号
+    for m in re.finditer(r"\bv?\d+\.\d+(?:\.\d+)?(?:-\w+)?", text):
+        v = m.group(0)
+        if len(v) >= 4:  # 过滤过短
+            nums.add(v)
+    return nums
+
+
+def detect_omissions(raw_text: str, rewritten_text: str) -> dict[str, Any]:
+    """
+    v1.7.1 新增：自动 omission diff（硬阻级）。
+    来自用户反馈：静默删除事实条目完全不能接受。
+
+    采用"完全消失"判定：raw 中存在但 rewritten 中字符串层面完全不存在的条目。
+    避开"合并 3 行 bullet 为 1 句"类合理改写的误报。
+
+    检查三类硬事实：
+    - 列表项（markdown bullet/numbered）
+    - 文件路径条目（含扩展名）
+    - 数字常量（百分比/年份/金额/版本号）
+    """
+    raw_lists = _extract_list_items(raw_text)
+    rew_lists = _extract_list_items(rewritten_text)
+    raw_paths = _extract_file_paths(raw_text)
+    rew_paths = _extract_file_paths(rewritten_text)
+    raw_nums = _extract_numbers(raw_text)
+    rew_nums = _extract_numbers(rewritten_text)
+
+    # 列表项：raw 有但 rewritten 中作为子串完全不存在
+    missing_lists = []
+    for item in raw_lists:
+        if item not in rew_lists and item not in rewritten_text:
+            missing_lists.append(item)
+
+    # 文件路径：raw 有但 rewritten 中作为子串完全不存在
+    missing_paths = [p for p in raw_paths if p not in rewritten_text]
+
+    # 数字：raw 有但 rewritten 中作为子串完全不存在
+    missing_nums = [n for n in raw_nums if n not in rewritten_text]
+
+    findings = {
+        "missing_list_items": {
+            "count": len(missing_lists),
+            "items": missing_lists[:30],
+        },
+        "missing_file_paths": {
+            "count": len(missing_paths),
+            "items": missing_paths[:30],
+        },
+        "missing_numbers": {
+            "count": len(missing_nums),
+            "items": missing_nums[:30],
+        },
+        "severity": "high",
+        "rule": (
+            "护栏 8（omission-check）：原文存在但改写稿完全消失的列表项/文件路径/数字常量必须在改动清单显式说明理由。"
+            "禁止静默删除。误报判定：rewritten 中作为子串存在即不算消失（合并改写不触发）。"
+        ),
+    }
+    findings["total_omissions"] = (
+        findings["missing_list_items"]["count"]
+        + findings["missing_file_paths"]["count"]
+        + findings["missing_numbers"]["count"]
+    )
+    return findings
+
+
 def detect_metadata_chars(text: str) -> dict[str, Any]:
     """
     v1.7 新增：检测 PUA 私有区元数据 + 隐形控制字符。
@@ -610,13 +818,21 @@ def scan(text: str, bl: dict[str, Any]) -> dict[str, Any]:
             "report_only": bool(cq_cfg.get("report_only")),
         }
 
-    # ── 8. v1.7 新增：元数据字符检测 + 双重对冲检测 ──
+    # ── 8. v1.7 / v1.7.1 新增：元数据/双重对冲/元话语/hedge+claim/段分类 ──
     meta = detect_metadata_chars(text)
     if meta["pua_count"] or meta["zerowidth_count"] or meta["citeturn_pattern_count"]:
         findings["metadata_chars"] = meta
     dh = detect_double_hedging(text, bl)
     if dh["count"]:
         findings["double_hedging"] = dh
+    md = detect_meta_discourse(text, bl)
+    if md["count"]:
+        findings["meta_discourse_violation"] = md
+    hwc = detect_hedge_with_claim(text, bl)
+    if hwc["count"]:
+        findings["hedge_with_unverified_claim"] = hwc
+    seg = classify_paragraphs(text)
+    findings["paragraph_segments"] = seg
 
     # ── 9. 句子/段落统计 ──
     sents = split_sentences_zh(text)
@@ -774,6 +990,11 @@ def main() -> int:
     ap.add_argument("--stdin", action="store_true", help="从标准输入读取")
     ap.add_argument("--text", help="直接传入文本")
     ap.add_argument("--pretty", action="store_true", help="美化 JSON 输出")
+    ap.add_argument(
+        "--compare-with",
+        metavar="RAW_PATH",
+        help="v1.7.1 新增：比对原文模式。提供原文路径，scan 会执行 omission-check 检测列表项/文件路径/数字常量的删除。",
+    )
     args = ap.parse_args()
 
     sources = sum(bool(x) for x in [args.file, args.stdin, args.text])
@@ -816,6 +1037,27 @@ def main() -> int:
 
     bl = load_blacklist()
     report = scan(text, bl)
+
+    # v1.7.1 新增：--compare-with 触发 omission-check
+    if args.compare_with:
+        try:
+            raw_path = Path(args.compare_with)
+            if raw_path.stat().st_size > MAX_FILE_BYTES:
+                ap.error(f"--compare-with 文件过大（上限 {MAX_FILE_BYTES} 字节）")
+            raw_text = raw_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            ap.error(f"--compare-with 读取失败：{e}")
+        omissions = detect_omissions(raw_text, text)
+        report["findings"]["omission_check"] = omissions
+        if omissions["total_omissions"] > 0:
+            report.setdefault("warnings", []).append(
+                f"⚠️ omission-check 命中 {omissions['total_omissions']} 处事实条目静默删除（"
+                f"列表 {omissions['missing_list_items']['count']} / "
+                f"路径 {omissions['missing_file_paths']['count']} / "
+                f"数字 {omissions['missing_numbers']['count']}）。"
+                f"必须在改动清单显式说明每处删除理由。"
+            )
+
     indent = 2 if args.pretty else None
     print(json.dumps(report, ensure_ascii=False, indent=indent))
     return 0
