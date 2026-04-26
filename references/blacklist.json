@@ -299,7 +299,88 @@
         "bad_example": "删评分维度重复部分。表加 scope 标注。检测降权。",
         "good_example": "把 SKILL.md 评分章节里和 README 重复的那块删掉，给替换表加上「适用场景」标注，弯引号检测的扣分权重调低。",
         "rule": "连续 3 句以上无主语短句视为 changelog 风格；正文叙述要有主语，至少要让句子能独立读懂。"
+      },
+      {
+        "name": "元话语标记（v1.7 新增）",
+        "bad_example": "**结论**：现代冷链的'数据能力'不是单一系统能解决的 → 一句话总结：现代冷链的'数据能力'不是单一系统能解决的",
+        "good_example": "保留原文 **结论** 加粗标题，不替换为 '一句话总结：'/'TL;DR：'/'简言之：' 等元话语",
+        "rule": "研究报告/评审/学术文档的结论标题（**结论**/**核心**/**要点**）是研究者向同行陈述的声轨；'一句话总结：'/'TL;DR：' 是 AI 助手向用户做摘要的声轨。改写时禁止跨声轨切换。"
+      },
+      {
+        "name": "汉语经典连贯排比保护（v1.7 新增）",
+        "bad_example": "一是 OT 数据...二是实时人效...三是即便厂商提供 → 第一，OT 数据...\\n\\n第二，实时人效...\\n\\n第三，即便厂商提供",
+        "good_example": "保留原文'一是/二是/三是'内嵌段落结构。这是《荀子》一脉的汉语经典连贯排比，紧凑、非翻译腔，不是 AI 痕迹。",
+        "rule": "原文使用'一是 X，二是 Y，三是 Z'内嵌排比时**禁止改成'第一，X。\\n\\n第二，Y。\\n\\n第三，Z。'分段编号**。后者是英文学术腔（First/Second/Third）翻译进来的，反而更 AI。"
       }
     ]
+  },
+
+  "technical_writing_localized": {
+    "description": "v1.7 新增：中文技术写作的本地化书面体（OpenAPI/RFC/spec 翻译惯例），不是 AI 痕迹，禁止误改。来自 expert-technical 会审反馈。",
+    "protected": ["是否", "负责", "扫描", "无法", "应当", "需要", "通过", "进行", "实施", "标记"],
+    "rationale": {
+      "是否": "中文技术评审/RFC 翻译的标准疑问句式，等同英文 'whether'。改成'是不是'会读起来像不信任质询，正式度被损伤。",
+      "负责": "架构文档里 single responsibility 的关键动词，等同 'be responsible for'。改成'做'是降级为日常动词。",
+      "扫描": "scan/sweep 的标准翻译，技术工件中保留。改成'扫一遍'破坏精度。",
+      "无法": "cannot 的标准翻译，技术 spec 中是能力边界声明。改成'没法'破坏专业感。",
+      "进行": "技术文档里的轻动词，'进行 X' = 'X-ing'，是中文化语法填充，不是 AI 痕迹。",
+      "实施": "implement 的标准翻译，工程合同/SOP 中保留。"
+    },
+    "trigger_when_skip": "若文档命中场景为「技术工件 / spec / 架构文档 / RFC / API doc / OpenAPI / 工程评审 / 审计报告」，本类别整体跳过改写。",
+    "applies_to_scenarios": [
+      "技术工件 / changelog / 周报",
+      "商业 PR / 白皮书（仅 spec 部分）",
+      "教育课件（技术章节）"
+    ]
+  },
+
+  "hedge_protected": {
+    "description": "v1.7 新增：受保护的软主张词（attributed claim hedge）。原文带证人态度的表达必须保留模糊度，禁止升级为硬论断。来自 expert-academic 会审反馈（03 InstantMesh 事故）。",
+    "protected_phrases": [
+      "被认为", "据信", "据称", "学界普遍认为", "有人认为",
+      "倾向于", "似乎", "可能", "或许", "据观察",
+      "在某种意义上", "在一定程度上", "通常被视为"
+    ],
+    "forbidden_upgrades": {
+      "被认为...重要": "禁止改成「是必要条件」「是关键」「是核心」",
+      "似乎能减少": "禁止改成「可以减少」「能减少」",
+      "可能更优": "禁止改成「更优」「优于」「胜过」",
+      "在一定程度上": "禁止删除（删除等于断言成立）"
+    },
+    "rule": "护栏 9：原文用 hedge 词修饰的命题在改写时必须保持同等强度的 hedge。'X 被认为 Y' 改写后仍要包含'被认为/据信/普遍'类归属信号；'X 似乎 Y' 改写后仍要包含'看起来/可能'类不确定信号。把 attributed claim 升级为 necessary condition 是隐性事实越权。",
+    "case_safe_when": {
+      "似乎": ["原文确实有不确定语义，保留"],
+      "可能": ["原文真实有可能性陈述，保留"],
+      "被认为": ["学术引用的标准归属信号，永远保留"]
+    }
+  },
+
+  "business_colloquial_banned": {
+    "description": "v1.7 新增：商业写作禁用的过度口语词。商业克制专业感来自'书面+直白'而非'口语+直白'。来自 expert-business 会审反馈。",
+    "banned_in_business_context": [
+      "吃力", "跑得动", "跑不动", "抓不到", "搞不定",
+      "做个对比", "先说一句", "得说", "要先说",
+      "捋一下", "盘一盘", "整一整",
+      "保命", "兜底"
+    ],
+    "applies_to_scenarios": [
+      "商业 PR / 白皮书",
+      "商业研究报告",
+      "评估报告",
+      "VC 内参 / 技术雷达",
+      "工程估算文档"
+    ],
+    "fix": "改写商业文档时禁用上述词。如果原文已有这类词，保留；但禁止 skill 主动引入。"
+  },
+
+  "metadata_passthrough_chars": {
+    "description": "v1.7 新增：必须原样穿透的元数据字符。不是普通字符，是其他 agent 留下的隐形元数据包裹符。来自 expert-academic 会审反馈（16 citeturn 81 处泄漏事故）。",
+    "unicode_ranges": [
+      ["U+E000", "U+F8FF", "Private Use Area (PUA) — ChatGPT Deep Research / 各类 agent 引用占位符"],
+      ["U+200B", "U+200D", "Zero-width space / joiner / non-joiner — 不可见控制字符"],
+      ["U+FEFF", "U+FEFF", "Byte Order Mark"]
+    ],
+    "rule": "护栏 7：tokenizer 层把上述范围视为 metadata atom 原样穿透，禁止剥离包裹符。如果改写过程检测到 PUA 字符，应警告原文含元数据并停止改写或保留原段。",
+    "common_patterns": ["citeturn", "turn\\d+view\\d+", "search\\d+"]
   }
 }

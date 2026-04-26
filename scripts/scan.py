@@ -286,6 +286,105 @@ def negation_density_check(text: str, patterns: list[str]) -> dict[str, Any]:
     }
 
 
+def detect_metadata_chars(text: str) -> dict[str, Any]:
+    """
+    v1.7 新增：检测 PUA 私有区元数据 + 隐形控制字符。
+    来自 expert-academic 会审反馈（16 citeturn 81 处泄漏事故）。
+
+    范围：
+      U+E000-U+F8FF  Private Use Area (ChatGPT Deep Research / 各类 agent 占位符)
+      U+200B-U+200D  Zero-width space / joiner / non-joiner
+      U+FEFF         Byte Order Mark
+
+    报告（不扣分）：命中位置 + 周围 20 字 + citeturn 类伪 ID 模式提取。
+    """
+    pua_hits: list[dict[str, Any]] = []
+    zerowidth_hits: list[dict[str, Any]] = []
+    citeturn_hits: list[dict[str, Any]] = []
+
+    for i, ch in enumerate(text):
+        cp = ord(ch)
+        if 0xE000 <= cp <= 0xF8FF:
+            ctx_start = max(0, i - 10)
+            ctx_end = min(len(text), i + 11)
+            # context 中可能含其他 PUA 字符；用 unicode_escape 确保下游 JSON parser 安全
+            ctx_raw = text[ctx_start:ctx_end].replace("\n", "\\n")
+            ctx_safe = "".join(
+                ch if (ch == "\\" or 0x20 <= ord(ch) < 0x7F or 0x4E00 <= ord(ch) <= 0x9FFF or ord(ch) >= 0x3000 and ord(ch) < 0xE000)
+                else f"<U+{ord(ch):04X}>"
+                for ch in ctx_raw
+            )
+            pua_hits.append({
+                "pos": i,
+                "codepoint": f"U+{cp:04X}",
+                "context": ctx_safe,
+            })
+        elif 0x200B <= cp <= 0x200D or cp == 0xFEFF:
+            zerowidth_hits.append({
+                "pos": i,
+                "codepoint": f"U+{cp:04X}",
+            })
+
+    # 检测 citeturn 类伪 ID（即使 PUA 包裹符已被剥离，伪 ID 文本可能泄漏到正文）
+    for pat in (r"citeturn\d+view\d+", r"\bturn\d+view\d+", r"\bsearch\d+\b"):
+        for m in re.finditer(pat, text):
+            citeturn_hits.append({"match": m.group(0), "pos": m.start()})
+
+    return {
+        "pua_count": len(pua_hits),
+        "pua_hits": pua_hits[:30],
+        "zerowidth_count": len(zerowidth_hits),
+        "zerowidth_hits": zerowidth_hits[:30],
+        "citeturn_pattern_count": len(citeturn_hits),
+        "citeturn_pattern_hits": citeturn_hits[:30],
+        "warning": (
+            "PUA 私有区/隐形字符是其他 agent 留下的元数据，禁止剥离或修改；"
+            "citeturn 模式即使 PUA 包裹符已剥离，伪 ID 文本也不应出现在正文。"
+            "如有命中，改写 agent 应停止改写或保留原段，并在改动清单显式标注。"
+        ) if (pua_hits or zerowidth_hits or citeturn_hits) else None,
+    }
+
+
+def detect_double_hedging(text: str, bl: dict[str, Any]) -> dict[str, Any]:
+    """
+    v1.7 新增：双重对冲检测（hedge over hedge）。
+    来自 expert-business 会审反馈（20 TechSonar：'代表潜在拐点 → 可能是一个潜在拐点'）。
+
+    规则：原文已有 hedge 词时禁止再叠加软化词；同一短句出现 ≥2 个 hedge 视为双重对冲。
+    """
+    hp = bl.get("hedge_protected", {})
+    protected = hp.get("protected_phrases") or []
+    if not protected:
+        return {"count": 0, "hits": []}
+
+    # 句级扫描：每个短句找 hedge 词数量
+    sents = split_sentences_zh(text)
+    double_hits: list[dict[str, Any]] = []
+    for si, s in enumerate(sents):
+        found = []
+        for w in protected:
+            if not w:
+                continue
+            idx = 0
+            while True:
+                p = s.find(w, idx)
+                if p < 0:
+                    break
+                found.append({"word": w, "pos": p})
+                idx = p + len(w)
+        if len(found) >= 2:
+            double_hits.append({
+                "sentence_idx": si,
+                "preview": s[:60],
+                "hedges": found[:5],
+            })
+    return {
+        "count": len(double_hits),
+        "hits": double_hits[:20],
+        "note": "双重对冲不扣分，但提示改写时不要再叠加软化词；本身可能是合理表达（多重 hedge 学术语）。",
+    }
+
+
 def scan(text: str, bl: dict[str, Any]) -> dict[str, Any]:
     findings: dict[str, Any] = {}
     sev_rank = {"high": 3, "mid": 2, "low": 1}
@@ -510,6 +609,14 @@ def scan(text: str, bl: dict[str, Any]) -> dict[str, Any]:
             "count": cq_count,
             "report_only": bool(cq_cfg.get("report_only")),
         }
+
+    # ── 8. v1.7 新增：元数据字符检测 + 双重对冲检测 ──
+    meta = detect_metadata_chars(text)
+    if meta["pua_count"] or meta["zerowidth_count"] or meta["citeturn_pattern_count"]:
+        findings["metadata_chars"] = meta
+    dh = detect_double_hedging(text, bl)
+    if dh["count"]:
+        findings["double_hedging"] = dh
 
     # ── 9. 句子/段落统计 ──
     sents = split_sentences_zh(text)
