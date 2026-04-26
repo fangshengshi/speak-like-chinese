@@ -1,0 +1,386 @@
+{
+  "schema_source": "https://github.com/anthropics/skills/blob/main/skills/skill-creator/references/schemas.md",
+  "version_under_test": "v1.3",
+  "grader": "Claude Opus 4.7 (manual grader, 部分 expectation 通过实跑 scan.py 验证，部分基于 SKILL.md 指引明确性预测)",
+  "graded_at": "2026-04-26",
+  "note": "skill-creator 标准 grading 是让 Claude 真跑 prompt 然后 grader 评。本机没装 skill-creator 也无法 spawn 独立 Claude 跑 prompt，所以分两类：static_check（跑 scan.py 验证）+ predicted（基于 SKILL.md 是否给了正确指引推测）。每条 expectation 标 verification_method。",
+
+  "expectations": [
+    {
+      "eval_id": 1,
+      "text": "改写后的文本不包含任何原文未出现的具体数字",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "SKILL.md 核心原则 2 + 护栏 3 + 反例清单都明示禁止编造数字；style-mapping.json data_attribution.warning 重复警告。指引明确，模型大概率会执行。"
+    },
+    {
+      "eval_id": 1,
+      "text": "改写后的文本不包含任何原文未出现的具体研究方/机构",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "护栏 3 明示反例「央行 2024 年报数据显示」是错的。"
+    },
+    {
+      "eval_id": 1,
+      "text": "若去掉模糊归因必须保留 [TODO: 补具体来源] 或类似 TODO 标记",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "style-mapping.json data_attribution.map 每条都明示「若原文未提供，保留 [TODO: 补具体来源]」。"
+    },
+    {
+      "eval_id": 1,
+      "text": "改写后整体语义保留：用户增长很快",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "核心原则 1「保留含义」明示。"
+    },
+
+    {
+      "eval_id": 2,
+      "text": "改写后不出现 '500'、'1000' 等任何具体居民数字",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "SKILL.md 改写示例 2 直接示范了「不要补 500 个居民」反例 + warning。"
+    },
+    {
+      "eval_id": 2,
+      "text": "改写后不强加 '问卷' / '访谈' / '电话调查' 等原文未提供的调查方法",
+      "passed": "predicted_fail",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "**v1.3 SKILL.md 改写示例 2 自身仍把「定量分析方法」改成「采用问卷方法调查」——原文未指定问卷，这是补造细节。**外部第四方评审第 2 项指出此问题，v1.3 尚未修复。这是必修 bug。"
+    },
+    {
+      "eval_id": 2,
+      "text": "改写后保留 '某市' 不替换为具体城市名",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "示例 2 改写保留了 '某市'。"
+    },
+    {
+      "eval_id": 2,
+      "text": "改写后保留 '居民出行行为' 这一研究对象不变",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "示例 2 改写保留了核心研究对象。"
+    },
+
+    {
+      "eval_id": 3,
+      "text": "改写后不出现原文未出现的具体功能名（批处理/键盘快捷键/离线模式）",
+      "passed": "predicted_fail",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "**v1.3 SKILL.md 改写示例 3 自身仍把『软件更新』补成『批处理、键盘快捷键和离线模式』——原文未提供这些功能。**外部第四方评审第 2 项指出此问题，v1.3 尚未修复。是必修 bug。"
+    },
+    {
+      "eval_id": 3,
+      "text": "改写后删除或重组三段式宣传语",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "示例 3 删除了'无缝、直观和强大'。"
+    },
+    {
+      "eval_id": 3,
+      "text": "改写后保留'软件更新'核心事实",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "示例 3 保留了'软件更新'。"
+    },
+    {
+      "eval_id": 3,
+      "text": "若需要具体化改为 [TODO: 补具体更新内容]",
+      "passed": "predicted_fail",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "示例 3 没用 TODO 而是直接编了三个功能。这是反幻觉原则与示例自相矛盾的 v1.3 残留 bug。"
+    },
+
+    {
+      "eval_id": 4,
+      "text": "改写后保留 '应' 这个法律义务词",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "护栏 1 + scenario-rules.md 法律文书场景明示禁所有义务词替换。"
+    },
+    {
+      "eval_id": 4,
+      "text": "改写后保留 '实施' 不替换为 '做'",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "style-mapping.json formal_to_colloquial.scope_unsafe_for 明列「法律文书 / 合同」。"
+    },
+    {
+      "eval_id": 4,
+      "text": "改写后保留 '完善' 不替换为 '改好'",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "同上。"
+    },
+    {
+      "eval_id": 4,
+      "text": "改写说明里指出识别为合同文本，按公文场景处理",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "护栏 1 强制要求识别后切换。"
+    },
+
+    {
+      "eval_id": 5,
+      "text": "改写后保留 '闭环'",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "blacklist.json jargon_internet.context_safe_when 明列 '闭环': ['控制论 / 反馈控制系统']。"
+    },
+    {
+      "eval_id": 5,
+      "text": "改写后保留 '对齐'",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "blacklist.json 明列 '对齐': ['AI alignment / 对齐研究', '矩阵对齐 / 内存对齐', '时序对齐 / 数据对齐']。"
+    },
+    {
+      "eval_id": 5,
+      "text": "scan.py 报告 / 改写说明指出术语豁免",
+      "passed": "static_fail",
+      "verification_method": "static_check",
+      "evidence": "**scan.py 不读 context_safe_when（设计如此），所以单跑 scan.py 不会指出术语豁免——会扣 '对齐'/'闭环' 的分。这是外部评审第 3 项指出的「检测模式与专业语境豁免冲突」问题，v1.3 尚未在「仅检测模式」流程里加「模型按 context_safe_when 标注疑似误报」步骤。**"
+    },
+    {
+      "eval_id": 5,
+      "text": "改写说明承认这些词是合法术语，未视为黑话扣分",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "在改写模式下，护栏 2 强制 LLM 凭语境豁免。但仅检测模式下不显式调用模型，是失效的。"
+    },
+
+    {
+      "eval_id": 6,
+      "text": "scan.py 输出的 deductions 里 '综上所述' 不出现在三个类别里被扣分三次",
+      "passed": "static_fail",
+      "verification_method": "static_check",
+      "evidence": "**已验证 bug**：跑 scan.py 输入 '综上所述，AI 影响很大。'，输出三处扣分：jargon_academic.mid(-2) + formal_connectors.high(-4) + closer_banned.mid(-2)，共 -8 分。一处出现被算三次。"
+    },
+    {
+      "eval_id": 6,
+      "text": "若 scan.py 仍跨类别记录命中应明示「同一 span 多重命中」或合并",
+      "passed": "static_fail",
+      "verification_method": "static_check",
+      "evidence": "scan.py 当前 deductions 输出 3 条独立条目，没有「同一 span」或合并标记。"
+    },
+    {
+      "eval_id": 6,
+      "text": "扣分总和不能因同一短语被算三次而偏高",
+      "passed": "static_fail",
+      "verification_method": "static_check",
+      "evidence": "实测一处 '综上所述' 扣 8 分，明显偏高（合理应为 4 分按 high 一次）。"
+    },
+
+    {
+      "eval_id": 7,
+      "text": "改写说明明确指出场景冲突",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "护栏 4 + scenario-rules.md 启发式表格列出反向特征确认。"
+    },
+    {
+      "eval_id": 7,
+      "text": "在不确定场景时主动询问用户",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "护栏 4 明示「冲突或模糊时主动询问用户场景」。"
+    },
+    {
+      "eval_id": 7,
+      "text": "未默认按公众号或小红书一刀切改写",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "护栏 4 + scenario-rules.md 都禁止默认。"
+    },
+
+    {
+      "eval_id": 8,
+      "text": "回答里没有给出改写后的文本",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "SKILL.md description 第 13-15 行明确分两种模式，「仅检测」模式不重写。"
+    },
+    {
+      "eval_id": 8,
+      "text": "回答里给出 AI 痕迹检测报告",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "description 明示仅检测模式跑 scan.py 给报告。"
+    },
+    {
+      "eval_id": 8,
+      "text": "改写说明里指出仅检测模式",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "description 明示。"
+    },
+
+    {
+      "eval_id": 9,
+      "text": "scan.py 输出 negation_parallel.high_density_hits = 0",
+      "passed": true,
+      "verification_method": "static_check",
+      "evidence": "已验证：实跑 scan.py 输入散文，high_density_hits=0。"
+    },
+    {
+      "eval_id": 9,
+      "text": "scan.py 输出 negation_parallel.low_density_hits >= 1",
+      "passed": true,
+      "verification_method": "static_check",
+      "evidence": "已验证：low_density_hits=1。"
+    },
+    {
+      "eval_id": 9,
+      "text": "整体评分 >= 90",
+      "passed": true,
+      "verification_method": "static_check",
+      "evidence": "已验证：score=100。"
+    },
+    {
+      "eval_id": 9,
+      "text": "改写建议里不去除合法递进",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "blacklist.json negation_parallel.density_rule + 文艺场景规则双重保护。"
+    },
+
+    {
+      "eval_id": 10,
+      "text": "改写后 '深耕'/'赛道' 至少其一被替换",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "blacklist.json jargon_internet.high 含「深耕」「赛道」（mid）。维度 A 明示替换。"
+    },
+    {
+      "eval_id": 10,
+      "text": "改写后 '很多客户' 仍保留为模糊词，不塞入 [TODO]",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "护栏 3 明示「服务过 [TODO: 补具体数字] 客户」是错的，「我们服务过很多客户」就好。"
+    },
+    {
+      "eval_id": 10,
+      "text": "改写说明承认 '很多' 是修饰性模糊不需要 TODO",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "护栏 3 明示判断标准（数据/事实/出处 vs 文学性模糊）。"
+    },
+
+    {
+      "eval_id": 11,
+      "text": "改写后保留 '#123' '#145' 编号回引",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "维度 D 适用范围限制 + scenario-rules.md 第 11 场景双重豁免。"
+    },
+    {
+      "eval_id": 11,
+      "text": "改写后保留 '~2h' 工时标记",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "scenario-rules.md 第 11 场景明示工时估算保留。"
+    },
+    {
+      "eval_id": 11,
+      "text": "改写后保留短句无主语格式",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "第 11 场景明示「修复 X / 新增 Y」commit message 标准格式保留。"
+    },
+    {
+      "eval_id": 11,
+      "text": "改写说明里指出按场景 11 豁免维度 D",
+      "passed": "predicted_pass",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "维度 D + 场景 11 双重明示。"
+    },
+
+    {
+      "eval_id": 12,
+      "text": "scan.py 报告 curly_quotes 扣分 ≤ 5",
+      "passed": true,
+      "verification_method": "static_check",
+      "evidence": "已验证：scan.py 对中文弯引号最多扣 5 分（cap=5），实际测试用例 score=100（因为 ASCII 直引号未命中弯引号字符列表，未扣分）。"
+    },
+    {
+      "eval_id": 12,
+      "text": "改写建议不强制用户改弯引号",
+      "passed": "needs_skill_change",
+      "verification_method": "predicted_from_skill_guidance",
+      "evidence": "**外部评审第 5 项指出**：blacklist.json curly_quotes 仍参与扣分（虽然 cap=5），且 SKILL.md 维度 B 列了弯引号。**当前未明示「中文弯引号是规范用法不必改」**。建议加 report_only 标记或在维度 B 加注释「仅当文本判定为英文段落异常时启用」。"
+    }
+  ],
+
+  "summary": {
+    "total_expectations": 41,
+    "passed": 33,
+    "failed": 6,
+    "needs_skill_change": 1,
+    "uncertain": 0,
+    "pass_rate": 0.805,
+    "static_check_count": 7,
+    "predicted_count": 34
+  },
+
+  "execution_metrics": {
+    "tool_calls": {
+      "Read": 1,
+      "Bash": 1,
+      "Write": 4
+    },
+    "files_inspected": [
+      "SKILL.md",
+      "blacklist.json",
+      "style-mapping.json",
+      "scenario-rules.md",
+      "coverage.md",
+      "scan.py"
+    ],
+    "static_checks_run": "evals/run_static_checks.py（含 scan.py 调用 3 个真实 prompt）"
+  },
+
+  "eval_feedback": {
+    "remaining_blockers_after_v1.3": [
+      {
+        "issue": "示例 2 「问卷方法」补造（外部评审第 2 项 P0）",
+        "eval_ids_failed": [2],
+        "fix": "SKILL.md 改写示例 2 把「采用问卷方法」改回「采用调查方法」或「[TODO: 补具体调查方法]」"
+      },
+      {
+        "issue": "示例 3 「批处理/键盘快捷键/离线模式」补造（外部评审第 2 项 P0）",
+        "eval_ids_failed": [3],
+        "fix": "SKILL.md 改写示例 3 改为「软件更新加入了 [TODO: 补具体更新内容]」或保留原 「无缝、直观和强大」否定排比删除后不补功能"
+      },
+      {
+        "issue": "scan.py 跨类别重复扣分（外部评审第 4 项）",
+        "eval_ids_failed": [6],
+        "fix": "scan.py 加 _dedupe_cross_category 函数：对同一 word 跨类别命中只算一次（按最高 severity 计），或合并为一处多重原因"
+      },
+      {
+        "issue": "仅检测模式与专业豁免冲突（外部评审第 3 项）",
+        "eval_ids_failed": [5],
+        "fix": "SKILL.md description 仅检测模式描述改为「跑 scan.py + 让模型按 context_safe_when 标注疑似误报」"
+      },
+      {
+        "issue": "中文弯引号未标 report_only（外部评审第 5 项）",
+        "eval_ids_failed": [12],
+        "fix": "blacklist.json curly_quotes_english 加 report_only: true；scan.py 改为 finding 不扣分；或注释「仅英文段落异常时启用」"
+      },
+      {
+        "issue": "frontmatter version 1.2.0 未同步（外部评审第 7 项）",
+        "eval_ids_failed": [],
+        "fix": "SKILL.md L24 metadata.version: 1.2.0 → 1.3.0"
+      }
+    ],
+    "v1.3_already_addressed_strengths": [
+      "护栏 1-6 体系完整且自洽",
+      "context_safe_when 字段覆盖 30+ 词",
+      "否定排比密度规则真正实现并通过 static check",
+      "维度 D 技术体裁豁免 + 场景 11 双重保护",
+      "TODO 仅用于关键事实位的判断标准明确"
+    ],
+    "overall_assessment": "v1.3 整体 expectation pass rate 80.5% (33/41)，但其中 6 个 fail 都集中在外部评审第 2/3/4/5/7 项尚未修复。修完这 6 项可达约 95%+ pass rate。当前**不**建议无条件发布，需要 v1.4 修订。"
+  }
+}

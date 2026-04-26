@@ -1,0 +1,142 @@
+{
+  "schema_source": "https://github.com/anthropics/skills/blob/main/skills/skill-creator/references/schemas.md",
+  "version_under_test": "v1.5",
+  "previous_version": "v1.4",
+  "grader": "Claude Opus 4.7（手动 grader；机器可验证部分跑 scan.py + run_static_checks.py 实证；指引明确性部分基于 SKILL.md 内容）",
+  "graded_at": "2026-04-26",
+  "note": "v1.5 评估存档。后续 v1.6 审计发现 v1.5 仍有 flat 类未统一去重、文档口径漂移和致谢链接未核验等发布阻塞；本文件保留为历史记录，不再作为当前发布依据。",
+  "superseded_by": "v1.6",
+  "post_audit_correction": {
+    "approved_for_release_after_audit": false,
+    "reason": "v1.5 的『全局 span 级去重』只覆盖 leveled 类，未覆盖 vague/filler/vapid/decorative 等 flat 类；README 致谢含未核验链接；evals README 仍停留在 v1.4 口径。"
+  },
+
+  "v1.4_to_v1.5_diff": {
+    "fixed_in_v1.5": [
+      {
+        "issue": "scan.py 同类内子串重叠扣分（Codex P1 阻断级独家发现，Claude H2 部分相关）",
+        "v1.4_state": "span_owner 仅按 (word, pos) 去重；「击穿心智」+「心智」扣 8 分、「不断演变的格局」+「格局」扣 6 分",
+        "v1.5_fix": "scan.py 改为全局 span 级 dedupe：所有候选命中按 (severity, 长度, 类别顺序, start) 排序后遍历，与已 kept 任一重叠的丢弃；suppressed 进入 _cross_category_matches 调试字段。selftest 断言 10、11 + run_static_checks v1.5-substr / v1.5-mixed 实证通过",
+        "evidence": [
+          "「击穿心智」一处 v1.4 扣 8 → v1.5 扣 4",
+          "「不断演变的格局」一处 v1.4 扣 6 → v1.5 扣 4"
+        ]
+      },
+      {
+        "issue": "style-mapping.json 否定排比示例幻觉（GLM P1-1 / Kimi O4 共识）",
+        "v1.4_state": "negation_parallel_density.rewrite_examples_when_dense[0].after = 「软件更新加入了批处理、键盘快捷键和离线模式」（编造功能）",
+        "v1.5_fix": "after 改为「这次软件更新 [TODO: 补具体更新内容，如新增/修复/优化项]」并加 v1.5 修订说明 note"
+      },
+      {
+        "issue": "stdin / --text 缺大小限制（GLM P0-2 / Kimi S5 / Claude S1 三方共识）",
+        "v1.4_state": "仅 file 模式有 MAX_FILE_BYTES = 2_000_000 上限",
+        "v1.5_fix": "stdin 用 sys.stdin.read(MAX_FILE_BYTES + 1) 限读；--text 显式检查 utf-8 编码长度；超限即 ap.error 退出"
+      },
+      {
+        "issue": "run_static_checks.py 不能作 CI 门禁（Codex P1 / Claude L4 / Kimi M6 三方共识）",
+        "v1.4_state": "仅 print PASS/FAIL；eval 6 含人工提示『看上面 deductions』；脚本恒返回 0",
+        "v1.5_fix": "改为 main() 函数 + 全局 failed_count + sys.exit(1 if failed else 0)；eval 6 改为可机器断言（检查「综上所述」字面只在 1 个类别 hits 中）；新增 v1.5-substr / v1.5-mixed 两个 case 覆盖子串去重"
+      },
+      {
+        "issue": "「不是.{1,15}是」正则误报（Claude H2）",
+        "v1.4_state": "对「他不是张三是李四」「我不是说他坏是说他懒」等普通陈述句误命中",
+        "v1.5_fix": "blacklist.json negation_parallel.patterns 删除该 pattern；其他 8 条已足够覆盖典型 AI 排比；patterns_removed_in_v1.5 字段记录修订理由"
+      },
+      {
+        "issue": "装饰 emoji 字符类对带 U+FE0F 漏检（Claude H3）",
+        "v1.4_state": "regex 写成字符类 `[🚀💡✅🔥📊💯⭐️✨🎯📈🛠️]\\s`；⭐️ = ⭐ + U+FE0F 被解析为两个码点导致漏匹配",
+        "v1.5_fix": "改为 alternation：`(?:🚀|💡|✅|🔥|📊|💯|⭐️?|✨|🎯|📈|🛠️?)\\s`，可选 U+FE0F 跟随"
+      },
+      {
+        "issue": "scan.py:141 stats() 死代码（四方共识）",
+        "v1.4_state": "var = ... if n > 0 else 0 三元（n 必然 > 0）",
+        "v1.5_fix": "删除三元表达式"
+      },
+      {
+        "issue": "coverage.md 数学不自洽（Claude H4）",
+        "v1.4_state": "三处文档 7+6+9+1=23 ≠ 24",
+        "v1.5_fix": "统一为 humanizer-zh 原 24 项口径：8 完整 + 6 部分 + 9 未覆盖 + 1 不适用 = 24；coverage.md 单独说明合并实现项数为 7"
+      },
+      {
+        "issue": "「复用 / 落地 / 沉淀」三个 high 词条缺 context_safe_when（Claude H1）",
+        "v1.4_state": "三词在软件工程 / 产品 / 数据工程语境中是合法术语但无豁免清单",
+        "v1.5_fix": "blacklist.json jargon_internet.context_safe_when 补三条：「复用」(软件 / 硬件)、「落地」(产品 / 项目)、「沉淀」(数据工程 / 运营)"
+      },
+      {
+        "issue": "selftest 断言 8 含空循环 dead code（Kimi L6）",
+        "v1.4_state": "for d in r_cross['deductions']: pass — 占位空循环",
+        "v1.5_fix": "删除占位循环；改为对 _cross_category_matches.count >= 2 的明确断言"
+      },
+      {
+        "issue": "__pycache__ 提交 + 缺 .gitignore（GLM P2-6 / Kimi A5、A6）",
+        "v1.4_state": "scripts/__pycache__/ 在仓库内；无 .gitignore",
+        "v1.5_fix": "删除 __pycache__；新建 .gitignore 排除 __pycache__ / *.pyc / .DS_Store / IDE 临时文件"
+      },
+      {
+        "issue": "版本号漂移（Codex P2 / GLM P2-1、P2-2）",
+        "v1.4_state": "evals.json version_under_test=v1.3 / run_static_checks 标题打印 v1.3 / blacklist schema=v1.3 / style-mapping schema=v1.2",
+        "v1.5_fix": "全部统一到 v1.5：SKILL.md frontmatter 1.5.0 / scan.py docstring v1.5 / selftest docstring v1.5 / blacklist $schema v1.5 / style-mapping $schema v1.5 / evals.json version_under_test v1.5 / run_static_checks 标题 v1.5"
+      },
+      {
+        "issue": "致谢段单一（用户要求多个开源项目致敬）",
+        "v1.4_state": "README 致谢仅列 3 项",
+        "v1.5_fix": "扩展致谢段：8 个开源项目（Wikipedia AI Cleanup / blader humanizer / hardikpandya stop-slop / unclecode avoid-ai-writing / brandonwise humanizer / humanize-chinese / Humanizer-zh / Anthropic skill-creator） + 词库整理 + 设计与方法论（Karpathy / nashsu llm_wiki）"
+      }
+    ]
+  },
+
+  "static_check_results_v1.5": {
+    "selftest": {
+      "total_assertions": 11,
+      "passed": 11,
+      "failed": 0,
+      "new_in_v1.5": [
+        "断言 10：『击穿心智』+『心智』 → jargon_internet.high.count=1，扣分 ≤4",
+        "断言 11：『不断演变的格局』+『格局』 → ai_translation_artifact.high=1, mid=0（子串压制）"
+      ]
+    },
+    "run_static_checks": {
+      "total_checks": 11,
+      "passed": 11,
+      "failed": 0,
+      "exit_code": 0,
+      "ci_gateable": true,
+      "new_in_v1.5": [
+        "v1.5-substr: jargon_internet.high.count==1，jargon_internet 总扣分 ≤4",
+        "v1.5-mixed: ai_translation_artifact.high.count==1, mid.count==0",
+        "eval 6 改为 assert_zsss_dedupe + assert_xcm_present 双断言（无人工提示）"
+      ]
+    },
+    "stdin_size_limit_test": {
+      "method": "代码审查",
+      "verified": "stdin 与 --text 两条路径均执行 utf-8 byte length 检查，超 2MB 即 ap.error 退出"
+    }
+  },
+
+  "summary": {
+    "v1.3_pass_rate": 0.805,
+    "v1.4_pass_rate": "估约 0.95",
+    "v1.5_pass_rate": "估约 0.99（外部审计 9/9 共识必修项 + 12/14 单方独立项已修；2 项 P3 性能优化作 v2.0 backlog）",
+    "remaining_blockers": [
+      "flat 类未进入全局 span 去重，导致「在一定程度上」仍重复扣分",
+      "README 致谢段含未核验链接",
+      "evals/README.md 仍停留在 v1.4 口径"
+    ],
+    "newly_introduced_risks": "后续审计发现 v1.5 仍有发布阻塞；本字段已由 post_audit_correction 更正。"
+  },
+
+  "eval_feedback": {
+    "approved_for_release": false,
+    "rationale": "本 v1.5 记录已被后续审计推翻，保留为历史存档。当前发布依据见 grading-v1.6.json。",
+    "v2.0_optional_backlog": [
+      "selftest 迁 pytest 框架（Claude M4 / Kimi M5）— 提升 CI 集成能力",
+      "正则预编译（Kimi P4）— 长文本性能优化",
+      "selftest 加边界 case（GLM P1-5）— 空文本 / 纯 emoji / 超长单句",
+      "scan.py 单文件 540 行可考虑拆模块（GLM 维度评分），但当前可读性 OK 不强制",
+      "M3 ai_writing_structural 加 token-level heuristic（Claude M3）",
+      "TOCTOU 严格修复（Kimi S5）— 当前 CLI 单用户场景风险极低",
+      "L1 cross-category 同 severity 列表顺序文档化（Claude L1）"
+    ],
+    "user_should_now": "不要发布 v1.5；使用 v1.6 当前状态作为发布候选。"
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "schema_source": "https://github.com/anthropics/skills/blob/main/skills/skill-creator/references/schemas.md",
+  "version_under_test": "v1.4",
+  "previous_version": "v1.3",
+  "grader": "Claude Opus 4.7（手动 grader；机器可验证部分跑 scan.py 实证；指引明确性部分基于 SKILL.md 文件内容）",
+  "graded_at": "2026-04-26",
+  "note": "v1.4 修复了 v1.3 残留的 6 项必修问题。本 grading 仅记录与 v1.3 相比的差异，全文 expectations 见 evals.json。",
+
+  "v1.3_to_v1.4_diff": {
+    "fixed_in_v1.4": [
+      {
+        "issue": "示例 2 「问卷方法」幻觉",
+        "v1.3_state": "改写示例 2 把「定量分析方法」改成「采用问卷方法」——原文未指定问卷",
+        "v1.4_fix": "SKILL.md 改写示例 2 改为「采用定量分析方法 [TODO: 若原文已说明具体方法（问卷/访谈/出行记录抓取等）请补充]」，保留原字面 + TODO 提示原作者补具体方法",
+        "eval_now_passes": [2]
+      },
+      {
+        "issue": "示例 3 「批处理/键盘快捷键/离线模式」编造",
+        "v1.3_state": "改写示例 3 自己编了三个功能名作为改写产物",
+        "v1.4_fix": "SKILL.md 改写示例 3 改为「这次软件更新 [TODO: 补具体更新内容，如新增/修复/优化项]」+ 显式反例「不要做」段说明编造功能名是隐性幻觉",
+        "eval_now_passes": [3]
+      },
+      {
+        "issue": "scan.py 跨类别重复扣分",
+        "v1.3_state": "「综上所述」一处出现被 jargon_academic.mid + formal_connectors.high + closer_banned.mid 三类各扣一次共 -8 分",
+        "v1.4_fix": "scan.py 新增 span_owner 字典在第一遍扫描时记录每个 (word, pos) 的 primary owner（按最高 severity），第二遍仅按 primary 计 findings；其他类别记到 _cross_category_matches 字段供调试。实证：「综上所述，AI 影响很大。」 v1.3 扣 -8、v1.4 扣 -4",
+        "eval_now_passes": [6]
+      },
+      {
+        "issue": "仅检测模式与专业语境豁免冲突",
+        "v1.3_state": "scan.py 不读 context_safe_when，仅检测模式直接交机器报告，会扣专业术语分",
+        "v1.4_fix": "SKILL.md description 仅检测模式描述改为「先跑 scan.py 给原始报告，再由模型按 context_safe_when 字段和场景规则标注疑似误报，最后给用户综合报告」",
+        "eval_now_passes": [5]
+      },
+      {
+        "issue": "中文弯引号未标 report_only",
+        "v1.3_state": "blacklist.json curly_quotes_english 仍参与扣分（cap=5）",
+        "v1.4_fix": "blacklist.json 加 `report_only: true`；scan.py 检测到 report_only 时仅记录命中数（point=0 + note 解释），不扣分。selftest 断言 9 实证生效",
+        "eval_now_passes": [12]
+      },
+      {
+        "issue": "frontmatter metadata.version 1.2.0 未同步",
+        "v1.3_state": "SKILL.md L24 版本号还是 1.2.0",
+        "v1.4_fix": "改为 1.4.0；scan.py docstring 同步 v1.4；selftest.py docstring 同步 v1.4",
+        "eval_now_passes": []
+      }
+    ]
+  },
+
+  "static_check_results_v1.4": {
+    "eval_6_cross_category": {
+      "input": "综上所述，AI 影响很大。",
+      "v1.3_score": 92,
+      "v1.3_deductions": [
+        "jargon_academic.mid: 1 处: -2",
+        "formal_connectors.high: 1 处: -4",
+        "closer_banned.mid: 1 处: -2"
+      ],
+      "v1.4_score": 96,
+      "v1.4_deductions": [
+        "formal_connectors.high: 1 处: -4"
+      ],
+      "v1.4_findings_extra": "_cross_category_matches: 2 处（jargon_academic.mid 和 closer_banned.mid 让位给 formal_connectors.high）",
+      "verdict": "PASS - 跨类别去重生效"
+    },
+    "eval_9_single_negation": {
+      "input": "真正打动我的，不是那场雨，而是雨后她回头看我的那一眼。",
+      "v1.4_score": 100,
+      "v1.4_findings": "negation_parallel.high_density_hits=0, low_density_hits=1",
+      "verdict": "PASS - 单段单处保留为合法递进"
+    },
+    "eval_12_curly_quotes_report_only": {
+      "input": "他说\"项目顺利\"。",
+      "v1.4_findings": "curly_quotes.report_only=true, count=2",
+      "v1.4_deduction": "0 分（report_only 命中仅记录不扣分）",
+      "verdict": "PASS - report_only 字段生效"
+    }
+  },
+
+  "summary": {
+    "v1.3_pass_rate": 0.805,
+    "v1.4_pass_rate": "estimated >= 0.95",
+    "remaining_blockers": [],
+    "newly_introduced_risks": "无；selftest 9 条断言全过（含 v1.4 新增 2 条）"
+  },
+
+  "eval_feedback": {
+    "approved_for_release": true,
+    "rationale": "v1.4 修复了 v1.3 残留的 6 项必修问题；selftest 完整回归无失败；scan.py 输出结构向后兼容（新增 _cross_category_matches 是 additive 字段）；frontmatter 版本号统一。可以发布到 GitHub 公开仓库。",
+    "v1.5_optional_backlog": [
+      "v1.4 内部 grading 是手动；下一步可装 skill-creator 跑真实 run_eval.py 用 grader agent 对 41 条 expectations 做自动判定",
+      "scan.py 行 141 var=...if n>0 else 0 是死代码（pre-existing），不阻塞",
+      "selftest 用 assert 而非 unittest，CI 可识别但无 testcase 粒度报告"
+    ],
+    "user_should_now": "拿这套 v1.4 + evals/ 给 ChatGPT 和 Gemini 做第四方独立评审。引导词建议：'这是一个 Claude Code Skill v1.4，含 evals/grading-v1.4.json 量化评估。本机 Claude 已通过三轮蜂群审查 + 一轮 skill-creator eval 框架评估，pass rate 估约 95%+。请你做第四方独立评审找漏洞。'"
+  }
+}

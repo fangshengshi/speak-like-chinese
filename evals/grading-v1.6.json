@@ -1,0 +1,46 @@
+{
+  "schema_source": "https://github.com/anthropics/skills/blob/main/skills/skill-creator/references/schemas.md",
+  "version_under_test": "v1.6",
+  "previous_version": "v1.5",
+  "graded_at": "2026-04-26",
+  "grader": "Cursor GPT-5.5（机器可验证部分：scripts/selftest.py + evals/run_static_checks.py；文档一致性部分：人工审计）",
+  "static_check_results_v1.6": {
+    "selftest": {
+      "numbered_regression_assertions": 14,
+      "passed": 14,
+      "failed": 0,
+      "new_in_v1.6": [
+        "「在一定程度上」与「一定」跨 leveled/flat 类重叠只扣一次",
+        "装饰 emoji 覆盖 Markdown 标题、列表项和无空格标题",
+        "stats([0, 0, 0]) 显式标记 all_zero"
+      ]
+    },
+    "run_static_checks": {
+      "total_checks": 15,
+      "passed": 15,
+      "failed": 0,
+      "exit_code": 0,
+      "ci_gateable": true,
+      "new_in_v1.6": [
+        "v1.6-flat-overlap: absolute/vague/jargon 相关扣分只发生 1 次",
+        "v1.6-decorative-emoji: decorative_emojis.count >= 3"
+      ]
+    }
+  },
+  "fixed_in_v1.6": [
+    "所有可定位 span 类统一进入去重候选池",
+    "span 去重复杂度避免 O(C^2) kept 两两扫描",
+    "stdin 按原始字节执行 2MB 上限",
+    "装饰 emoji 检测支持 Markdown 标题、列表项和无空格标题",
+    "SKILL.md frontmatter description 收窄为触发描述，正文补 When to Use / When NOT to Use / Success Criteria",
+    "新增医疗文书 / 医嘱 / 病历场景",
+    "README 移除未核验致谢链接，evals/README 升级到 v1.6 口径",
+    "coverage.md 将中文弯引号说明改为 report_only 默认 0 分"
+  ],
+  "remaining_blockers": [],
+  "approved_for_release": true,
+  "residual_risks": [
+    "ai_writing_structural 仍由模型语义自判，不进入静态扫描",
+    "skill-creator 完整 LLM eval 未在本轮运行；本轮只运行了本仓库可机器验证的静态门禁"
+  ]
+}
